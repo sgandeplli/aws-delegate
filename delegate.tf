@@ -11,10 +11,7 @@ data "aws_eks_cluster_auth" "eks" {
   name = var.eks_cluster_name
 }
 
-# AWS Provider Configuration
-provider "aws" {
-  region = var.aws_region
-}
+
 
 # Kubernetes Provider (Using AWS EKS Cluster Authentication)
 provider "kubernetes" {
