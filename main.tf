@@ -1,9 +1,13 @@
-# Get the default VPC
-data "aws_vpc" "default" {
-  default = true  # Fixed default VPC reference
+provider "aws" {
+  region = "us-east-1" # Change region if needed
 }
 
-# Get the default subnets
+# Get the default VPC
+data "aws_vpc" "default" {
+  default = true
+}
+
+# Get default subnets
 data "aws_subnets" "default" {
   filter {
     name   = "vpc-id"
@@ -11,10 +15,11 @@ data "aws_subnets" "default" {
   }
 }
 
+# Get default security group
 data "aws_security_group" "default" {
   filter {
     name   = "group-name"
-    values = ["default"]  # The default security group name
+    values = ["default"]
   }
 
   filter {
@@ -23,35 +28,34 @@ data "aws_security_group" "default" {
   }
 }
 
-
 # IAM Role for EKS Cluster
 resource "aws_iam_role" "eks_cluster_role" {
   name = var.eks_cluster_role
 
   assume_role_policy = jsonencode({
+    Version = "2012-10-17"
     Statement = [{
       Action = "sts:AssumeRole"
       Effect = "Allow"
       Principal = { Service = "eks.amazonaws.com" }
     }]
-    Version = "2012-10-17"
   })
 }
 
-# Attach necessary policies to EKS Cluster role
+# Attach IAM policy for EKS Cluster
 resource "aws_iam_role_policy_attachment" "eks_policy" {
   role       = aws_iam_role.eks_cluster_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
 }
 
-# Create the EKS Cluster
+# Create EKS Cluster
 resource "aws_eks_cluster" "eks" {
   name     = var.eks_cluster_name
   role_arn = aws_iam_role.eks_cluster_role.arn
 
   vpc_config {
     subnet_ids             = data.aws_subnets.default.ids
-    endpoint_public_access = true  # Ensures worker nodes can connect to the control plane
+    endpoint_public_access = true
   }
 
   depends_on = [aws_iam_role_policy_attachment.eks_policy]
@@ -62,16 +66,16 @@ resource "aws_iam_role" "eks_node_role" {
   name = var.eks_node_role
 
   assume_role_policy = jsonencode({
+    Version = "2012-10-17"
     Statement = [{
       Action = "sts:AssumeRole"
       Effect = "Allow"
       Principal = { Service = "ec2.amazonaws.com" }
     }]
-    Version = "2012-10-17"
   })
 }
 
-# Attach policies to Worker Node Role
+# Attach IAM policies to Worker Node Role
 resource "aws_iam_role_policy_attachment" "worker_node" {
   role       = aws_iam_role.eks_node_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
@@ -97,15 +101,13 @@ resource "aws_security_group" "eks_nodes_sg" {
   vpc_id = data.aws_vpc.default.id
   name   = "eks-nodes-sg"
 
-  # Allow inbound communication from the control plane
   ingress {
     from_port       = 443
     to_port         = 443
     protocol        = "tcp"
-    security_groups = [data.aws_security_group.default.id]  # Allow cluster SG to communicate
+    security_groups = [data.aws_security_group.default.id]
   }
 
-  # Allow worker nodes to communicate with each other
   ingress {
     from_port   = 0
     to_port     = 65535
@@ -113,7 +115,6 @@ resource "aws_security_group" "eks_nodes_sg" {
     self        = true
   }
 
-  # Allow all outbound traffic
   egress {
     from_port   = 0
     to_port     = 0
@@ -138,7 +139,6 @@ resource "aws_eks_node_group" "eks_nodes" {
   instance_types = ["t3.medium"]
   ami_type       = "AL2_x86_64"
 
- 
   depends_on = [
     aws_iam_role_policy_attachment.worker_node,
     aws_iam_role_policy_attachment.cni_policy,
