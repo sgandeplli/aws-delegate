@@ -1,21 +1,17 @@
 # Fetch AWS account details
 data "aws_caller_identity" "current" {}
 
-# Fetch AWS EKS Cluster Details
+# Fetch AWS EKS Cluster Details (AFTER creation)
 data "aws_eks_cluster" "eks" {
-  name = var.eks_cluster_name
+  name       = aws_eks_cluster.eks.name
+  depends_on = [aws_eks_cluster.eks]
 }
 
 # Get AWS EKS Cluster Authentication (for kubectl access)
 data "aws_eks_cluster_auth" "eks" {
-  name = var.eks_cluster_name
+  name       = aws_eks_cluster.eks.name
+  depends_on = [aws_eks_cluster.eks]
 }
-
-provider "aws" {
-  alias  = "delegate"
-  region = var.aws_region
-}
-
 
 # Kubernetes Provider (Using AWS EKS Cluster Authentication)
 provider "kubernetes" {
@@ -33,7 +29,13 @@ provider "helm" {
   }
 }
 
-# Deploy Harness Delegate Module
+# Wait for EKS Cluster and Node Group to be ready
+resource "time_sleep" "wait_for_nodes" {
+  depends_on       = [aws_eks_cluster.eks, aws_eks_node_group.eks_nodes]
+  create_duration  = "30s"
+}
+
+# Deploy Harness Delegate Module (AFTER EKS Cluster is Ready)
 module "delegate" {
   source          = "harness/harness-delegate/kubernetes"
   version        = "0.1.8"
@@ -48,5 +50,9 @@ module "delegate" {
   replicas        = 1
   upgrader_enabled = true
 
-  depends_on      = [aws_eks_cluster.eks]
+  depends_on      = [
+    aws_eks_cluster.eks, 
+    aws_eks_node_group.eks_nodes,
+    time_sleep.wait_for_nodes
+  ]
 }
