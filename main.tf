@@ -97,7 +97,7 @@ resource "aws_iam_role_policy_attachment" "ssm_policy" {
 # Security Group for Worker Nodes
 resource "aws_security_group" "eks_nodes_sg" {
   vpc_id = data.aws_vpc.default.id
-  name   = "eks-nodes-sg"
+  name   = "eks-nodes-sg-${var.eks_cluster_name}"
 
   # Allow inbound communication from the control plane
   ingress {
